@@ -1,0 +1,244 @@
+﻿@page "/login"
+
+@using System.ComponentModel.DataAnnotations
+@using GestionHerramientasTalleres.Models
+@using Microsoft.AspNetCore.Identity
+
+@inject SignInManager<UsuarioSistema> SignInManager
+@inject NavigationManager Navigation
+
+<PageTitle>Iniciar sesión | Gestión de Herramientas</PageTitle>
+
+<div class="login-fondo">
+    <div class="login-tarjeta">
+
+        <div class="login-icono">
+            🔐
+        </div>
+
+        <h2>Bienvenido</h2>
+
+        <p class="login-subtitulo">
+            Inicia sesión para acceder al sistema
+        </p>
+
+        @if (modelo is not null)
+        {
+            <EditForm Model="@modelo"
+                      FormName="login"
+                      OnValidSubmit="@IniciarSesion">
+
+                <DataAnnotationsValidator />
+
+                <div class="login-campo">
+                    <label>Correo electrónico</label>
+
+                    <InputText class="form-control"
+                               type="email"
+                               @bind-Value="modelo.Email"
+                               placeholder="ejemplo@correo.com" />
+
+                    <ValidationMessage For="@(() => modelo.Email)" />
+                </div>
+
+                <div class="login-campo">
+                    <label>Contraseña</label>
+
+                    <InputText class="form-control"
+                               type="password"
+                               @bind-Value="modelo.Password"
+                               placeholder="Ingresa tu contraseña" />
+
+                    <ValidationMessage For="@(() => modelo.Password)" />
+                </div>
+
+                <div class="login-recordar">
+                    <InputCheckbox @bind-Value="modelo.Recordarme" />
+                    <span>Recordarme</span>
+                </div>
+
+                @if (!string.IsNullOrWhiteSpace(mensajeError))
+                {
+                    <div class="alert alert-danger">
+                        @mensajeError
+                    </div>
+                }
+
+                <button type="submit" class="login-boton">
+                    Iniciar sesión
+                </button>
+
+            </EditForm>
+        }
+
+        <div class="login-pie">
+            ¿No tienes una cuenta?
+            <a href="/registro">Regístrate</a>
+        </div>
+
+    </div>
+</div>
+
+<style>
+    .login-fondo {
+        min-height: 85vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 30px 15px;
+        background: #f3f6fb;
+    }
+
+    .login-tarjeta {
+        width: 100%;
+        max-width: 440px;
+        background: white;
+        border-radius: 18px;
+        padding: 35px;
+        box-shadow: 0 12px 35px rgba(16, 39, 68, 0.12);
+    }
+
+    .login-icono {
+        width: 65px;
+        height: 65px;
+        background: #eaf2ff;
+        border-radius: 16px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 30px;
+        margin: 0 auto 18px;
+    }
+
+    .login-tarjeta h2 {
+        text-align: center;
+        color: #102744;
+        font-weight: 700;
+        margin-bottom: 8px;
+    }
+
+    .login-subtitulo {
+        text-align: center;
+        color: #64748b;
+        margin-bottom: 28px;
+    }
+
+    .login-campo {
+        margin-bottom: 18px;
+    }
+
+        .login-campo label {
+            display: block;
+            font-weight: 600;
+            color: #334155;
+            margin-bottom: 7px;
+        }
+
+        .login-campo .form-control {
+            padding: 12px;
+            border: 1px solid #dbe3ee;
+            border-radius: 9px;
+        }
+
+            .login-campo .form-control:focus {
+                border-color: #2563eb;
+                box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+            }
+
+    .login-recordar {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        margin-bottom: 22px;
+        color: #475569;
+    }
+
+    .login-boton {
+        width: 100%;
+        background: #2563eb;
+        color: white;
+        border: none;
+        padding: 13px;
+        border-radius: 10px;
+        font-weight: 600;
+        cursor: pointer;
+    }
+
+        .login-boton:hover {
+            background: #1d4ed8;
+        }
+
+    .login-pie {
+        text-align: center;
+        margin-top: 23px;
+        color: #64748b;
+    }
+
+        .login-pie a {
+            color: #2563eb;
+            font-weight: 600;
+            text-decoration: none;
+        }
+
+    .login-campo .validation-message {
+        color: #dc2626;
+        font-size: 13px;
+        margin-top: 5px;
+    }
+</style>
+
+@code {
+
+    [SupplyParameterFromForm(FormName = "login")]
+    private ModeloLogin? modelo { get; set; }
+
+    private string mensajeError = "";
+
+    protected override void OnInitialized()
+    {
+        modelo ??= new ModeloLogin();
+    }
+
+    private async Task IniciarSesion()
+    {
+        mensajeError = "";
+
+        if (modelo is null)
+        {
+            mensajeError = "No se pudieron obtener los datos.";
+            return;
+        }
+
+        var resultado = await SignInManager.PasswordSignInAsync(
+            modelo.Email.Trim(),
+            modelo.Password,
+            modelo.Recordarme,
+            lockoutOnFailure: true);
+
+        if (resultado.Succeeded)
+        {
+            Navigation.NavigateTo("/", forceLoad: true);
+        }
+        else if (resultado.IsLockedOut)
+        {
+            mensajeError =
+                "Cuenta bloqueada temporalmente. Inténtalo más tarde.";
+        }
+        else
+        {
+            mensajeError = "Correo o contraseña incorrectos.";
+        }
+    }
+
+    public class ModeloLogin
+    {
+        [Required(ErrorMessage = "El correo es obligatorio.")]
+        [EmailAddress(ErrorMessage = "Ingresa un correo válido.")]
+        public string Email { get; set; } = "";
+
+        [Required(ErrorMessage = "La contraseña es obligatoria.")]
+        public string Password { get; set; } = "";
+
+        public bool Recordarme { get; set; } = false;
+    }
+}

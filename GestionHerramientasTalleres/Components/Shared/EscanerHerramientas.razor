@@ -1,0 +1,462 @@
+﻿@using Microsoft.JSInterop
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+
+<div class="escaner-panel">
+
+    <h4>Identificar herramienta</h4>
+
+    <p class="escaner-descripcion">
+        Introduce el código manualmente o escanea
+        la etiqueta de la herramienta.
+    </p>
+
+    <!-- CODIGO MANUAL -->
+
+    <label class="escaner-label">
+        Código de la herramienta
+    </label>
+
+    <div class="escaner-campo">
+
+        <input type="text"
+               class="form-control"
+               placeholder="Ejemplo: HER-004"
+               @bind="codigo"
+               @bind:event="oninput" />
+
+        <button type="button"
+                class="btn btn-primary"
+                @onclick="BuscarCodigo">
+            Buscar
+        </button>
+
+    </div>
+
+    <!-- OPCIONES DE ESCANEO -->
+
+    <div class="escaner-opciones">
+
+        <button type="button"
+                class="escaner-boton"
+                disabled="@camaraActiva"
+                @onclick="ActivarCamara">
+
+            <span class="escaner-icono">📷</span>
+
+            <strong>Escanear código</strong>
+
+            <small>Utilizar la cámara</small>
+
+        </button>
+
+        <label class="escaner-boton">
+
+            <span class="escaner-icono">🖼️</span>
+
+            <strong>Subir fotografía</strong>
+
+            <small>Seleccionar una imagen</small>
+
+            <input type="file"
+                   id="@inputId"
+                   accept="image/*"
+                   class="escaner-archivo"
+                   @onchange="EscanearFotografia" />
+
+        </label>
+
+    </div>
+
+    <!-- VISTA DE LA CAMARA -->
+
+    <div class="escaner-camara"
+         style="display: @(camaraActiva ? "block" : "none")">
+
+        <div class="escaner-video-contenedor">
+
+            <video id="@videoId"
+                   autoplay
+                   muted
+                   playsinline>
+            </video>
+
+            <div class="escaner-linea"></div>
+
+        </div>
+
+        <p>
+            Coloca el código de barras frente a la cámara.
+        </p>
+
+        <button type="button"
+                class="btn btn-danger"
+                @onclick="CerrarCamara">
+
+            Cerrar cámara
+
+        </button>
+
+    </div>
+
+    <!-- MENSAJES DEL SISTEMA -->
+    @if (!string.IsNullOrWhiteSpace(mensaje))
+    {
+        <div class="alert @(hayError ? "alert-danger" : "alert-success") mt-3">
+
+            @mensaje
+
+        </div>
+    }
+
+</div>
+
+<style>
+
+    .escaner-panel {
+        background: #ffffff;
+        border: 1px solid #dce5f0;
+        border-radius: 16px;
+        padding: 24px;
+        margin-bottom: 24px;
+        color: #142d4e;
+        box-shadow: 0 4px 12px rgba(20, 45, 78, 0.06);
+    }
+
+        .escaner-panel h4 {
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+    .escaner-descripcion {
+        color: #64748b;
+        font-size: 14px;
+        margin-bottom: 22px;
+    }
+
+    .escaner-label {
+        font-weight: 600;
+        margin-bottom: 8px;
+    }
+
+    .escaner-campo {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 20px;
+    }
+
+        .escaner-campo input {
+            min-width: 0;
+            border-radius: 10px;
+            padding: 12px;
+        }
+
+        .escaner-campo button {
+            border-radius: 10px;
+            padding: 10px 22px;
+        }
+
+    .escaner-opciones {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 14px;
+    }
+
+    .escaner-boton {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 7px;
+        padding: 22px 12px;
+        background: #f0f6ff;
+        border: 1px solid #bfdbfe;
+        border-radius: 12px;
+        color: #1746b0;
+        text-align: center;
+        cursor: pointer;
+        transition: background 0.2s;
+    }
+
+        .escaner-boton:hover {
+            background: #dbeafe;
+        }
+
+        .escaner-boton:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .escaner-boton small {
+            color: #64748b;
+        }
+
+    .escaner-icono {
+        font-size: 30px;
+    }
+
+    .escaner-archivo {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        opacity: 0;
+        cursor: pointer;
+    }
+
+    .escaner-camara {
+        margin-top: 20px;
+        padding: 16px;
+        background: #142d4e;
+        border-radius: 12px;
+        color: white;
+        text-align: center;
+    }
+
+    .escaner-video-contenedor {
+        position: relative;
+        overflow: hidden;
+        background: #000000;
+        border-radius: 10px;
+    }
+
+        .escaner-video-contenedor video {
+            display: block;
+            width: 100%;
+            max-height: 340px;
+            object-fit: contain;
+        }
+
+    .escaner-linea {
+        position: absolute;
+        top: 50%;
+        left: 10%;
+        width: 80%;
+        height: 2px;
+        background: #ef4444;
+        box-shadow: 0 0 8px #ef4444;
+        pointer-events: none;
+    }
+
+    .escaner-camara p {
+        margin-top: 14px;
+        font-size: 14px;
+    }
+
+    @@media (max-width: 576px) {
+
+        .escaner-panel {
+            padding: 16px;
+        }
+
+        .escaner-opciones {
+            grid-template-columns: 1fr;
+        }
+
+        .escaner-campo {
+            flex-direction: column;
+        }
+    }
+
+</style>
+
+@code {
+
+    // Permite enviar el código detectado
+    // al inventario o al módulo de préstamos.
+
+    [Parameter]
+    public EventCallback<string> OnCodigoDetectado { get; set; }
+
+    private string codigo = "";
+    private string mensaje = "";
+
+    private bool hayError = false;
+    private bool camaraActiva = false;
+    private bool iniciarCamaraPendiente = false;
+
+    private readonly string videoId =
+        $"video-{Guid.NewGuid():N}";
+
+    private readonly string inputId =
+        $"imagen-{Guid.NewGuid():N}";
+
+    private DotNetObjectReference<EscanerHerramientas>? referencia;
+
+    // ========================================
+    // BUSQUEDA MANUAL
+    // ========================================
+
+    private async Task BuscarCodigo()
+    {
+        codigo = codigo.Trim().ToUpperInvariant();
+
+        if (string.IsNullOrWhiteSpace(codigo))
+        {
+            hayError = true;
+            mensaje = "Introduce el código de la herramienta.";
+            return;
+        }
+
+        await CerrarCamara();
+
+        hayError = false;
+        mensaje = $"Código identificado: {codigo}";
+
+        await OnCodigoDetectado.InvokeAsync(codigo);
+    }
+
+    // ========================================
+    // ACTIVAR CAMARA
+    // ========================================
+
+    private void ActivarCamara()
+    {
+        mensaje = "";
+        hayError = false;
+
+        referencia ??=
+            DotNetObjectReference.Create(this);
+
+        camaraActiva = true;
+        iniciarCamaraPendiente = true;
+    }
+
+    protected override async Task OnAfterRenderAsync(
+        bool firstRender)
+    {
+        if (iniciarCamaraPendiente && camaraActiva)
+        {
+            iniciarCamaraPendiente = false;
+
+            try
+            {
+                await JS.InvokeVoidAsync(
+                    "escanerHerramientas.iniciarCamara",
+                    videoId,
+                    referencia);
+            }
+            catch (JSException ex)
+            {
+                await ErrorEscaner(ex.Message);
+            }
+        }
+    }
+
+    // ========================================
+    // CERRAR CAMARA
+    // ========================================
+
+    private async Task CerrarCamara()
+    {
+        camaraActiva = false;
+        iniciarCamaraPendiente = false;
+
+        try
+        {
+            await JS.InvokeVoidAsync(
+                "escanerHerramientas.detenerCamara");
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+        catch (JSException)
+        {
+        }
+    }
+
+    // ========================================
+    // ESCANEAR FOTOGRAFIA
+    // ========================================
+
+    private async Task EscanearFotografia()
+    {
+        mensaje = "";
+        hayError = false;
+
+        await CerrarCamara();
+
+        referencia ??=
+            DotNetObjectReference.Create(this);
+
+        try
+        {
+            await JS.InvokeVoidAsync(
+                "escanerHerramientas.escanearImagen",
+                inputId,
+                referencia);
+        }
+        catch (JSException ex)
+        {
+            await ErrorEscaner(ex.Message);
+        }
+    }
+
+    // ========================================
+    // RECIBIR CODIGO DESDE JAVASCRIPT
+    // ========================================
+
+    [JSInvokable]
+    public async Task CodigoDetectado(string resultado)
+    {
+        await InvokeAsync(async () =>
+        {
+            codigo = resultado.Trim().ToUpperInvariant();
+
+            camaraActiva = false;
+            iniciarCamaraPendiente = false;
+            hayError = false;
+
+            mensaje = $"Código identificado: {codigo}";
+
+            await OnCodigoDetectado.InvokeAsync(codigo);
+
+            StateHasChanged();
+        });
+    }
+
+    // ========================================
+    // RECIBIR ERRORES DESDE JAVASCRIPT
+    // ========================================
+
+    [JSInvokable]
+    public async Task ErrorEscaner(string error)
+    {
+        await InvokeAsync(() =>
+        {
+            camaraActiva = false;
+            iniciarCamaraPendiente = false;
+            hayError = true;
+            mensaje = error;
+
+            StateHasChanged();
+        });
+    }
+
+    // ========================================
+    // LIBERAR RECURSOS
+    // ========================================
+
+    public async ValueTask DisposeAsync()
+    {
+        if (referencia != null)
+        {
+            try
+            {
+                await JS.InvokeVoidAsync(
+                    "escanerHerramientas.detenerCamara");
+            }
+            catch (JSDisconnectedException)
+            {
+            }
+            catch (JSException)
+            {
+            }
+            finally
+            {
+                referencia.Dispose();
+            }
+        }
+    }
+}

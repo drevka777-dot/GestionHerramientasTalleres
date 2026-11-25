@@ -1,0 +1,234 @@
+﻿@page "/prestamos"
+
+@using GestionHerramientasTalleres.Models
+@using GestionHerramientasTalleres.Services
+@using Microsoft.AspNetCore.Authorization
+@using static Microsoft.AspNetCore.Components.Web.RenderMode
+
+@attribute [Authorize(Roles = "Usuario")]
+@rendermode InteractiveServer
+
+@inject InventarioService Inventario
+@inject PrestamoService ServicioPrestamos
+@inject ILogger<Prestamos> Logger
+
+<PageTitle>Mis préstamos</PageTitle>
+
+<div class="container-fluid py-4">
+
+    <div class="bg-primary text-white rounded-3 p-4 mb-4">
+        <h1 class="h3">Préstamos de herramientas</h1>
+
+        <p class="mb-0">
+            Solicita una herramienta y consulta tus solicitudes.
+        </p>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(mensaje))
+    {
+        <div class="alert alert-info" role="status">
+            @mensaje
+        </div>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(error))
+    {
+        <div class="alert alert-danger" role="alert">
+            @error
+        </div>
+    }
+
+    <div class="card shadow-sm mb-4">
+        <div class="card-body">
+            <h2 class="h5 mb-3">Nueva solicitud</h2>
+
+            <label for="herramienta" class="form-label">
+                Herramienta disponible
+            </label>
+
+            <select id="herramienta"
+                    class="form-select mb-3"
+                    @bind="codigoSeleccionado"
+                    disabled="@ocupado">
+
+                <option value="">Selecciona una herramienta</option>
+
+                @foreach (var herramienta in herramientasDisponibles)
+                {
+                    <option value="@herramienta.Codigo">
+                        @herramienta.Codigo - @herramienta.Nombre
+                    </option>
+                }
+            </select>
+
+            @if (!ocupado && herramientasDisponibles.Count == 0)
+            {
+                <p class="text-secondary">
+                    No hay herramientas disponibles para solicitar.
+                </p>
+            }
+
+            <p class="text-secondary small">
+                El administrador deberá aprobar tu solicitud.
+                Solicitar una herramienta no reserva su disponibilidad.
+            </p>
+
+            <button type="button"
+                    class="btn btn-primary"
+                    disabled="@(ocupado ||
+                        string.IsNullOrWhiteSpace(codigoSeleccionado))"
+                    @onclick="SolicitarAsync">
+
+                @(ocupado ? "Procesando..." : "Solicitar préstamo")
+            </button>
+        </div>
+    </div>
+
+    <div class="card shadow-sm">
+        <div class="card-body">
+            <h2 class="h5 mb-3">Mis solicitudes</h2>
+
+            <div class="table-responsive">
+                <table class="table table-hover align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Solicitud</th>
+                            <th>Código</th>
+                            <th>Fecha de solicitud UTC</th>
+                            <th>Estado</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        @if (ocupado)
+                        {
+                            <tr>
+                                <td colspan="4">Cargando...</td>
+                            </tr>
+                        }
+                        else if (misPrestamos.Count == 0)
+                        {
+                            <tr>
+                                <td colspan="4"
+                                    class="text-center text-secondary py-4">
+                                    Todavía no tienes solicitudes.
+                                </td>
+                            </tr>
+                        }
+                        else
+                        {
+                            @foreach (var prestamo in misPrestamos)
+                            {
+                                <tr @key="prestamo.Id">
+                                    <td>@prestamo.Id</td>
+                                    <td>@prestamo.HerramientaCodigo</td>
+                                    <td>
+                                        @prestamo.FechaSolicitud.ToString(
+                                            "dd/MM/yyyy HH:mm")
+                                    </td>
+                                    <td>
+                                        <span class="@ObtenerClaseEstado(
+                                            prestamo.Estado)">
+                                            @prestamo.Estado
+                                        </span>
+                                    </td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+@code {
+    private List<Herramienta> herramientasDisponibles = new();
+    private List<Prestamo> misPrestamos = new();
+
+    private string codigoSeleccionado = "";
+    private string mensaje = "";
+    private string error = "";
+    private bool ocupado = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            await CargarDatosAsync();
+        }
+        catch (UnauthorizedAccessException)
+        {
+            error = "Debes iniciar sesión con una cuenta de Usuario.";
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error al cargar los préstamos.");
+            error = "No se pudieron cargar los datos.";
+        }
+        finally
+        {
+            ocupado = false;
+        }
+    }
+
+    private async Task CargarDatosAsync()
+    {
+        herramientasDisponibles = Inventario
+            .ObtenerHerramientas()
+            .Where(h => h.Disponible)
+            .ToList();
+
+        misPrestamos = await ServicioPrestamos
+            .ObtenerMisPrestamosAsync();
+    }
+
+    private async Task SolicitarAsync()
+    {
+        if (ocupado ||
+            string.IsNullOrWhiteSpace(codigoSeleccionado))
+        {
+            return;
+        }
+
+        ocupado = true;
+        mensaje = "";
+        error = "";
+
+        try
+        {
+            mensaje = await ServicioPrestamos
+                .SolicitarPrestamoAsync(codigoSeleccionado);
+
+            await CargarDatosAsync();
+        }
+        catch (UnauthorizedAccessException)
+        {
+            error = "Esta operación requiere una cuenta con rol Usuario.";
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error al solicitar el préstamo.");
+
+            error = "No se pudo completar la operación. " +
+                "Recarga la página y revisa tus solicitudes antes de reintentar.";
+        }
+        finally
+        {
+            ocupado = false;
+        }
+    }
+
+    private string ObtenerClaseEstado(EstadoPrestamo estado)
+    {
+        return estado switch
+        {
+            EstadoPrestamo.Pendiente => "badge bg-warning text-dark",
+            EstadoPrestamo.Aprobado => "badge bg-primary",
+            EstadoPrestamo.Rechazado => "badge bg-danger",
+            EstadoPrestamo.Devuelto => "badge bg-success",
+            _ => "badge bg-secondary"
+        };
+    }
+}

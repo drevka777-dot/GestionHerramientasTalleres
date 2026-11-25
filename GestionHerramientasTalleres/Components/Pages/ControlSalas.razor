@@ -1,0 +1,817 @@
+﻿@page "/control-salas"
+@rendermode InteractiveServer
+
+@using Microsoft.AspNetCore.Authorization
+@using GestionHerramientasTalleres.Models
+@using GestionHerramientasTalleres.Services
+
+@attribute [Authorize(Roles = "Administrador")]
+
+@inject SalaService ServicioSalas
+@inject InventarioService ServicioInventario
+
+<PageTitle>Control de salas | Gestión de Herramientas</PageTitle>
+
+<div class="salas-pagina">
+
+    <!-- ENCABEZADO -->
+
+    <div class="salas-encabezado">
+        <div>
+            <p class="salas-etiqueta">
+                ADMINISTRACIÓN DE RECURSOS
+            </p>
+
+            <h1>Control de salas</h1>
+
+            <p class="salas-descripcion">
+                Administra los talleres y laboratorios
+                de la institución.
+            </p>
+        </div>
+
+        <div class="salas-icono">🏫</div>
+    </div>
+
+    <!-- ESTADÍSTICAS -->
+
+    <div class="salas-estadisticas">
+
+        <div class="salas-tarjeta">
+            <span>Total de salas</span>
+            <strong>@salas.Count</strong>
+        </div>
+
+        <div class="salas-tarjeta">
+            <span>Salas activas</span>
+            <strong>@salas.Count(s => s.Activa)</strong>
+        </div>
+
+        <div class="salas-tarjeta">
+            <span>Salas inactivas</span>
+            <strong>@salas.Count(s => !s.Activa)</strong>
+        </div>
+
+    </div>
+
+    <!-- RESUMEN GENERAL DE HERRAMIENTAS ASIGNADAS -->
+
+    <div class="salas-estadisticas" aria-label="Resumen de herramientas asignadas">
+        <div class="salas-tarjeta">
+            <span>Herramientas asignadas</span>
+            <strong>@herramientas.Count(h => h.SalaId.HasValue)</strong>
+        </div>
+        <div class="salas-tarjeta">
+            <span>Asignadas disponibles</span>
+            <strong class="salas-numero-disponible">@herramientas.Count(h => h.SalaId.HasValue && h.Disponible)</strong>
+        </div>
+        <div class="salas-tarjeta">
+            <span>Asignadas no disponibles</span>
+            <strong class="salas-numero-ocupado">@herramientas.Count(h => h.SalaId.HasValue && !h.Disponible)</strong>
+        </div>
+    </div>
+
+    <!-- REGISTRAR SALA -->
+
+    <section class="salas-panel">
+
+        <h2>Registrar nueva sala</h2>
+
+        <div class="salas-formulario">
+
+            <div>
+                <label>Nombre de la sala</label>
+
+                <input class="form-control"
+                       maxlength="100"
+                       @bind="nombre"
+                       placeholder="Laboratorio de Sistemas" />
+            </div>
+
+            <div>
+                <label>Tipo</label>
+
+                <select class="form-select" @bind="tipo">
+                    <option value="Laboratorio">Laboratorio</option>
+                    <option value="Taller">Taller</option>
+                </select>
+            </div>
+
+            <div>
+                <label>Ubicación</label>
+
+                <input class="form-control"
+                       maxlength="150"
+                       @bind="ubicacion"
+                       placeholder="Bloque A - Piso 2" />
+            </div>
+
+            <div>
+                <label>Descripción</label>
+
+                <input class="form-control"
+                       maxlength="300"
+                       @bind="descripcion"
+                       placeholder="Descripción de la sala" />
+            </div>
+
+        </div>
+
+        <button class="salas-boton"
+                disabled="@procesando"
+                @onclick="Registrar">
+
+            @(procesando ? "Procesando..." : "+ Registrar sala")
+
+        </button>
+
+        @if (!string.IsNullOrWhiteSpace(mensaje))
+        {
+            <div class="alert @(exito ? "alert-success" : "alert-danger") mt-3"
+                 role="alert">
+                @mensaje
+            </div>
+        }
+
+    </section>
+
+    <!-- TABLA DE SALAS -->
+
+    <section class="salas-panel">
+
+        <div class="salas-titulo-acciones">
+            <h2>Salas registradas</h2>
+            <button type="button" class="btn btn-sm btn-outline-primary"
+                    disabled="@procesando" @onclick="ActualizarEstadisticas">
+                Actualizar estadísticas
+            </button>
+        </div>
+
+        <div class="table-responsive">
+
+            <table class="table salas-tabla">
+
+                <thead>
+                    <tr>
+                        <th>Nombre</th>
+                        <th>Tipo</th>
+                        <th>Ubicación</th>
+                        <th>Estado</th>
+                        <th>Herramientas</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+
+                    @foreach (var sala in salas)
+                    {
+                        <tr>
+                            <td>@sala.Nombre</td>
+
+                            <td>@sala.Tipo</td>
+
+                            <td>@sala.Ubicacion</td>
+
+                            <td>
+                                @if (sala.Activa)
+                                {
+                                    <span class="badge bg-success">
+                                        Activa
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-secondary">
+                                        Inactiva
+                                    </span>
+                                }
+                            </td>
+
+                            <td>
+                                <span class="badge bg-primary">
+                                    @ContarHerramientas(sala.Id)
+                                </span>
+                            </td>
+
+                            <td>
+                                <button class="btn btn-sm btn-outline-info me-2"
+                                        disabled="@procesando"
+                                        @onclick="() => AlternarHerramientas(sala.Id)">
+                                    @(salaExpandidaId == sala.Id ? "Ocultar herramientas" : "Ver herramientas")
+                                </button>
+
+                                <button class="btn btn-sm btn-outline-primary me-2"
+                                        disabled="@procesando"
+                                        @onclick="() => Editar(sala)">
+                                    Editar
+                                </button>
+
+                                <button class="btn btn-sm btn-outline-secondary"
+                                        disabled="@procesando"
+                                        @onclick="() => CambiarEstado(sala.Id)">
+
+                                    @(sala.Activa ? "Desactivar" : "Activar")
+
+                                </button>
+                            </td>
+                        </tr>
+
+                        @if (salaExpandidaId == sala.Id)
+                        {
+                            <tr>
+                                <td colspan="6" class="salas-detalle-celda">
+                                    <div class="salas-detalle">
+                                        <h3>Herramientas de @sala.Nombre</h3>
+                                        <div class="salas-resumen-laboratorio">
+                                            <div class="salas-mini-tarjeta">
+                                                <span>Total asignadas</span>
+                                                <strong>@ContarHerramientas(sala.Id)</strong>
+                                            </div>
+                                            <div class="salas-mini-tarjeta">
+                                                <span>Disponibles</span>
+                                                <strong class="salas-numero-disponible">@ContarDisponibles(sala.Id)</strong>
+                                            </div>
+                                            <div class="salas-mini-tarjeta">
+                                                <span>No disponibles</span>
+                                                <strong class="salas-numero-ocupado">@ContarNoDisponibles(sala.Id)</strong>
+                                            </div>
+                                        </div>
+
+                                        @if (!HerramientasDeSala(sala.Id).Any())
+                                        {
+                                            <p class="text-muted mb-0">
+                                                Esta sala todavía no tiene herramientas asignadas.
+                                            </p>
+                                        }
+                                        else
+                                        {
+                                            <div class="table-responsive">
+                                                <table class="table table-sm mb-0">
+                                                    <thead>
+                                                        <tr>
+                                                            <th>Código</th>
+                                                            <th>Herramienta</th>
+                                                            <th>Disponibilidad</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        @foreach (var herramienta in HerramientasDeSala(sala.Id))
+                                                        {
+                                                            <tr>
+                                                                <td>@herramienta.Codigo</td>
+                                                                <td>@herramienta.Nombre</td>
+                                                                <td>
+                                                                    @if (herramienta.Disponible)
+                                                                    {
+                                                                        <span class="badge bg-success">Disponible</span>
+                                                                    }
+                                                                    else
+                                                                    {
+                                                                        <span class="badge bg-warning text-dark">No disponible</span>
+                                                                    }
+                                                                </td>
+                                                            </tr>
+                                                        }
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        }
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    }
+
+                </tbody>
+
+            </table>
+
+        </div>
+
+        @if (salas.Count == 0)
+        {
+            <p class="text-muted">
+                Todavía no hay salas registradas.
+            </p>
+        }
+
+    </section>
+
+    <!-- EDITAR SALA -->
+    @if (editando)
+    {
+        <section class="salas-panel">
+
+            <h2>Editar sala</h2>
+
+            <div class="salas-formulario">
+
+                <div>
+                    <label>Nombre</label>
+
+                    <input class="form-control"
+                           maxlength="100"
+                           @bind="nombreEdicion" />
+                </div>
+
+                <div>
+                    <label>Tipo</label>
+
+                    <select class="form-select"
+                            @bind="tipoEdicion">
+
+                        <option value="Laboratorio">Laboratorio</option>
+                        <option value="Taller">Taller</option>
+
+                    </select>
+                </div>
+
+                <div>
+                    <label>Ubicación</label>
+
+                    <input class="form-control"
+                           maxlength="150"
+                           @bind="ubicacionEdicion" />
+                </div>
+
+                <div>
+                    <label>Descripción</label>
+
+                    <input class="form-control"
+                           maxlength="300"
+                           @bind="descripcionEdicion" />
+                </div>
+
+            </div>
+
+            <button class="salas-boton"
+                    disabled="@procesando"
+                    @onclick="GuardarEdicion">
+
+                @(procesando ? "Guardando..." : "Guardar cambios")
+
+            </button>
+
+            <button class="btn btn-secondary ms-2"
+                    disabled="@procesando"
+                    @onclick="CancelarEdicion">
+                Cancelar
+            </button>
+
+        </section>
+    }
+
+</div>
+
+<style>
+    .salas-pagina {
+        max-width: 1450px;
+        margin: auto;
+        padding: 12px 0 40px;
+    }
+
+    .salas-encabezado {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 28px;
+        gap: 20px;
+    }
+
+        .salas-encabezado h1 {
+            color: #142d4e;
+            font-weight: 800;
+            font-size: 34px;
+        }
+
+    .salas-etiqueta {
+        color: #2563eb;
+        font-size: 12px;
+        font-weight: 800;
+        letter-spacing: 1.5px;
+    }
+
+    .salas-descripcion {
+        color: #64748b;
+    }
+
+    .salas-icono {
+        background: #dbeafe;
+        padding: 16px;
+        border-radius: 18px;
+        font-size: 28px;
+    }
+
+    .salas-estadisticas {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 18px;
+        margin-bottom: 25px;
+    }
+
+    .salas-tarjeta {
+        background: white;
+        border: 1px solid #e2e8f0;
+        border-radius: 16px;
+        padding: 22px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }
+
+        .salas-tarjeta span {
+            color: #64748b;
+            font-weight: 600;
+        }
+
+        .salas-tarjeta strong {
+            color: #142d4e;
+            font-size: 34px;
+        }
+
+    .salas-panel {
+        background: white;
+        border: 1px solid #e2e8f0;
+        border-radius: 18px;
+        padding: 26px;
+        margin-bottom: 24px;
+    }
+
+        .salas-panel h2 {
+            color: #142d4e;
+            font-size: 20px;
+            font-weight: 750;
+            margin-bottom: 22px;
+        }
+
+    .salas-formulario {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 18px;
+        margin-bottom: 20px;
+    }
+
+        .salas-formulario label {
+            display: block;
+            color: #334155;
+            font-weight: 650;
+            margin-bottom: 8px;
+        }
+
+    .salas-boton {
+        background: #2563eb;
+        color: white;
+        border: none;
+        border-radius: 10px;
+        padding: 12px 20px;
+        font-weight: 700;
+        cursor: pointer;
+    }
+
+        .salas-boton:hover {
+            background: #1d4ed8;
+        }
+
+        .salas-boton:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+    .salas-tabla th {
+        background: #eff6ff;
+        color: #334155;
+        padding: 14px;
+    }
+
+    .salas-tabla td {
+        padding: 14px;
+        vertical-align: middle;
+    }
+
+    .salas-detalle-celda {
+        background: #f8fafc;
+    }
+
+    .salas-detalle {
+        padding: 12px;
+        border-left: 4px solid #2563eb;
+    }
+
+        .salas-detalle h3 {
+            color: #142d4e;
+            font-size: 17px;
+            font-weight: 750;
+            margin-bottom: 16px;
+        }
+
+    .salas-titulo-acciones {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-bottom: 20px;
+    }
+
+        .salas-titulo-acciones h2 {
+            margin-bottom: 0;
+        }
+
+    .salas-resumen-laboratorio {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+        margin-bottom: 18px;
+    }
+
+    .salas-mini-tarjeta {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        padding: 14px;
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        background: #fff;
+    }
+
+        .salas-mini-tarjeta span {
+            color: #64748b;
+            font-size: 13px;
+        }
+
+        .salas-mini-tarjeta strong {
+            color: #142d4e;
+            font-size: 24px;
+        }
+
+    .salas-numero-disponible {
+        color: #15803d !important;
+    }
+
+    .salas-numero-ocupado {
+        color: #b45309 !important;
+    }
+
+    @@media (max-width: 850px) {
+        .salas-estadisticas,
+        .salas-formulario,
+        .salas-resumen-laboratorio {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+
+@code {
+
+    // ========================================
+    // LISTA DE SALAS
+    // ========================================
+
+    private List<Sala> salas = new();
+    private List<Herramienta> herramientas = new();
+    private int? salaExpandidaId;
+
+    private int ContarHerramientas(int salaId) =>
+        herramientas.Count(h => h.SalaId == salaId);
+
+    private int ContarDisponibles(int salaId) =>
+        herramientas.Count(h => h.SalaId == salaId && h.Disponible);
+
+    private int ContarNoDisponibles(int salaId) =>
+        herramientas.Count(h => h.SalaId == salaId && !h.Disponible);
+
+    private void ActualizarEstadisticas()
+    {
+        if (procesando) return;
+        CargarSalas();
+    }
+
+    private IEnumerable<Herramienta> HerramientasDeSala(int salaId) =>
+        herramientas.Where(h => h.SalaId == salaId).OrderBy(h => h.Codigo);
+
+    private void AlternarHerramientas(int salaId)
+    {
+        if (salaExpandidaId == salaId)
+        {
+            salaExpandidaId = null;
+            return;
+        }
+
+        // Refrescar para mostrar cambios recientes de inventario y préstamos.
+        herramientas = ServicioInventario.ObtenerHerramientas();
+        salaExpandidaId = salaId;
+    }
+
+    // ========================================
+    // REGISTRO
+    // ========================================
+
+    private string nombre = "";
+    private string tipo = "Laboratorio";
+    private string ubicacion = "";
+    private string descripcion = "";
+
+    // ========================================
+    // MENSAJES Y ESTADO
+    // ========================================
+
+    private string mensaje = "";
+    private bool exito;
+    private bool procesando;
+
+    // ========================================
+    // EDICIÓN
+    // ========================================
+
+    private bool editando;
+    private int idEdicion;
+
+    private string nombreEdicion = "";
+    private string tipoEdicion = "Laboratorio";
+    private string ubicacionEdicion = "";
+    private string descripcionEdicion = "";
+
+    // ========================================
+    // INICIALIZACIÓN
+    // ========================================
+
+    protected override void OnInitialized()
+    {
+        CargarSalas();
+    }
+
+    // ========================================
+    // CONSULTAR SALAS
+    // ========================================
+
+    private void CargarSalas()
+    {
+        salas = ServicioSalas.ObtenerSalas();
+        herramientas = ServicioInventario.ObtenerHerramientas();
+    }
+
+    // ========================================
+    // REGISTRAR SALA
+    // ========================================
+
+    private async Task Registrar()
+    {
+        if (procesando)
+            return;
+
+        procesando = true;
+        mensaje = "";
+
+        try
+        {
+            exito = await ServicioSalas.RegistrarSalaAsync(
+                nombre,
+                tipo,
+                ubicacion,
+                descripcion);
+
+            mensaje = exito
+                ? "Sala registrada correctamente."
+                : "Verifica el nombre y el tipo de sala.";
+
+            if (exito)
+            {
+                nombre = "";
+                tipo = "Laboratorio";
+                ubicacion = "";
+                descripcion = "";
+
+                CargarSalas();
+            }
+        }
+        catch (UnauthorizedAccessException)
+        {
+            exito = false;
+            mensaje = "No tienes permisos para registrar salas.";
+        }
+        catch (Exception)
+        {
+            exito = false;
+            mensaje = "Ocurrió un error al registrar la sala.";
+        }
+        finally
+        {
+            procesando = false;
+        }
+    }
+
+    // ========================================
+    // PREPARAR EDICIÓN
+    // ========================================
+
+    private void Editar(Sala sala)
+    {
+        idEdicion = sala.Id;
+        nombreEdicion = sala.Nombre;
+        tipoEdicion = sala.Tipo;
+        ubicacionEdicion = sala.Ubicacion;
+        descripcionEdicion = sala.Descripcion;
+
+        editando = true;
+        mensaje = "";
+    }
+
+    // ========================================
+    // GUARDAR EDICIÓN
+    // ========================================
+
+    private async Task GuardarEdicion()
+    {
+        if (procesando)
+            return;
+
+        procesando = true;
+        mensaje = "";
+
+        try
+        {
+            exito = await ServicioSalas.EditarSalaAsync(
+                idEdicion,
+                nombreEdicion,
+                tipoEdicion,
+                ubicacionEdicion,
+                descripcionEdicion);
+
+            mensaje = exito
+                ? "Sala actualizada correctamente."
+                : "No se pudo actualizar la sala.";
+
+            if (exito)
+            {
+                editando = false;
+                CargarSalas();
+            }
+        }
+        catch (UnauthorizedAccessException)
+        {
+            exito = false;
+            mensaje = "No tienes permisos para editar salas.";
+        }
+        catch (Exception)
+        {
+            exito = false;
+            mensaje = "Ocurrió un error al actualizar la sala.";
+        }
+        finally
+        {
+            procesando = false;
+        }
+    }
+
+    // ========================================
+    // ACTIVAR O DESACTIVAR
+    // ========================================
+
+    private async Task CambiarEstado(int id)
+    {
+        if (procesando)
+            return;
+
+        procesando = true;
+        mensaje = "";
+
+        try
+        {
+            exito = await ServicioSalas.CambiarEstadoAsync(id);
+
+            mensaje = exito
+                ? "Estado de la sala actualizado."
+                : "No se pudo cambiar el estado.";
+
+            if (exito)
+            {
+                CargarSalas();
+            }
+        }
+        catch (UnauthorizedAccessException)
+        {
+            exito = false;
+            mensaje = "No tienes permisos para cambiar el estado.";
+        }
+        catch (Exception)
+        {
+            exito = false;
+            mensaje = "Ocurrió un error al cambiar el estado.";
+        }
+        finally
+        {
+            procesando = false;
+        }
+    }
+
+    // ========================================
+    // CANCELAR EDICIÓN
+    // ========================================
+
+    private void CancelarEdicion()
+    {
+        editando = false;
+        mensaje = "";
+    }
+}

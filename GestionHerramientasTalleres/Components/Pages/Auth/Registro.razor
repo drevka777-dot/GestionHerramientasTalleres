@@ -1,0 +1,329 @@
+﻿@page "/registro"
+
+@using System.ComponentModel.DataAnnotations
+@using GestionHerramientasTalleres.Models
+@using Microsoft.AspNetCore.Identity
+
+@inject UserManager<UsuarioSistema> UserManager
+
+<PageTitle>Registro | Gestión de Herramientas</PageTitle>
+
+<div class="registro-fondo">
+    <div class="registro-tarjeta">
+
+        <div class="registro-icono">
+            🛠️
+        </div>
+
+        <h2>Crear cuenta</h2>
+
+        <p class="registro-subtitulo">
+            Sistema de Gestión de Herramientas
+        </p>
+
+        @if (modelo is null)
+        {
+            <div class="alert alert-danger">
+                No se pudo cargar el formulario de registro.
+            </div>
+        }
+        else if (registroExitoso)
+        {
+            <div class="alert alert-success">
+                ¡Tu cuenta se creó correctamente!
+                Ya puedes iniciar sesión.
+            </div>
+
+            <a href="/login"
+               class="registro-boton registro-enlace">
+                Iniciar sesión
+            </a>
+        }
+        else
+        {
+            <EditForm Model="@modelo"
+                      FormName="registro"
+                      OnValidSubmit="@RegistrarUsuario">
+
+                <DataAnnotationsValidator />
+
+                <div class="registro-campo">
+                    <label>Nombre completo</label>
+
+                    <InputText class="form-control"
+                               @bind-Value="modelo.NombreCompleto"
+                               placeholder="Ingresa tu nombre" />
+
+                    <ValidationMessage For="@(() => modelo.NombreCompleto)" />
+                </div>
+
+                <div class="registro-campo">
+                    <label>Correo electrónico</label>
+
+                    <InputText class="form-control"
+                               type="email"
+                               @bind-Value="modelo.Email"
+                               placeholder="ejemplo@correo.com" />
+
+                    <ValidationMessage For="@(() => modelo.Email)" />
+                </div>
+
+                <div class="registro-campo">
+                    <label>Contraseña</label>
+
+                    <InputText class="form-control"
+                               type="password"
+                               @bind-Value="modelo.Password"
+                               placeholder="Mínimo 8 caracteres" />
+
+                    <ValidationMessage For="@(() => modelo.Password)" />
+                </div>
+
+                <div class="registro-campo">
+                    <label>Confirmar contraseña</label>
+
+                    <InputText class="form-control"
+                               type="password"
+                               @bind-Value="modelo.ConfirmarPassword"
+                               placeholder="Repite tu contraseña" />
+
+                    <ValidationMessage For="@(() => modelo.ConfirmarPassword)" />
+                </div>
+
+                @if (!string.IsNullOrWhiteSpace(mensajeError))
+                {
+                    <div class="alert alert-danger">
+                        @mensajeError
+                    </div>
+                }
+
+                <button type="submit"
+                        class="registro-boton">
+                    Crear cuenta
+                </button>
+
+            </EditForm>
+
+            <div class="registro-pie">
+                ¿Ya tienes una cuenta?
+                <a href="/login">Iniciar sesión</a>
+            </div>
+        }
+
+    </div>
+</div>
+
+<style>
+    .registro-fondo {
+        min-height: 85vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 30px 15px;
+        background: #f3f6fb;
+    }
+
+    .registro-tarjeta {
+        width: 100%;
+        max-width: 440px;
+        background: white;
+        border-radius: 18px;
+        padding: 35px;
+        box-shadow: 0 12px 35px rgba(16, 39, 68, 0.12);
+    }
+
+    .registro-icono {
+        width: 65px;
+        height: 65px;
+        background: #eaf2ff;
+        border-radius: 16px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 30px;
+        margin: 0 auto 18px;
+    }
+
+    .registro-tarjeta h2 {
+        text-align: center;
+        color: #102744;
+        font-weight: 700;
+        margin-bottom: 8px;
+    }
+
+    .registro-subtitulo {
+        text-align: center;
+        color: #64748b;
+        margin-bottom: 28px;
+    }
+
+    .registro-campo {
+        margin-bottom: 18px;
+    }
+
+        .registro-campo label {
+            display: block;
+            font-weight: 600;
+            color: #334155;
+            margin-bottom: 7px;
+        }
+
+        .registro-campo .form-control {
+            padding: 12px;
+            border: 1px solid #dbe3ee;
+            border-radius: 9px;
+        }
+
+            .registro-campo .form-control:focus {
+                border-color: #2563eb;
+                box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+            }
+
+    .registro-boton {
+        display: block;
+        width: 100%;
+        background: #2563eb;
+        color: white;
+        border: none;
+        padding: 13px;
+        border-radius: 10px;
+        font-weight: 600;
+        margin-top: 10px;
+        cursor: pointer;
+        text-align: center;
+    }
+
+        .registro-boton:hover {
+            background: #1d4ed8;
+            color: white;
+        }
+
+    .registro-enlace {
+        text-decoration: none;
+    }
+
+    .registro-pie {
+        text-align: center;
+        margin-top: 23px;
+        color: #64748b;
+    }
+
+        .registro-pie a {
+            color: #2563eb;
+            font-weight: 600;
+            text-decoration: none;
+        }
+
+    .registro-campo .validation-message {
+        color: #dc2626;
+        font-size: 13px;
+        margin-top: 5px;
+    }
+</style>
+
+@code {
+
+    // ========================================
+    // MODELO DEL FORMULARIO
+    // ========================================
+
+    [SupplyParameterFromForm(FormName = "registro")]
+    private ModeloRegistro? modelo { get; set; }
+
+    private string mensajeError = "";
+    private bool registroExitoso = false;
+
+    protected override void OnInitialized()
+    {
+        modelo ??= new ModeloRegistro();
+    }
+
+    // ========================================
+    // REGISTRO REAL CON IDENTITY
+    // ========================================
+
+    private async Task RegistrarUsuario()
+    {
+        mensajeError = "";
+        registroExitoso = false;
+
+        if (modelo is null)
+        {
+            mensajeError =
+                "No se pudieron obtener los datos del formulario.";
+
+            return;
+        }
+
+        var correo = modelo.Email.Trim();
+
+        var usuario = new UsuarioSistema
+        {
+            UserName = correo,
+            Email = correo,
+            NombreCompleto = modelo.NombreCompleto.Trim()
+        };
+
+        // Crear el usuario con ASP.NET Core Identity.
+        // Identity almacena un hash de la contraseña,
+        // no la contraseña en texto plano.
+        var resultado = await UserManager.CreateAsync(
+            usuario,
+            modelo.Password);
+
+        if (!resultado.Succeeded)
+        {
+            mensajeError = string.Join(" ",
+                resultado.Errors.Select(
+                    e => e.Description));
+
+            return;
+        }
+
+        // Todas las cuentas nuevas reciben
+        // automáticamente el rol Usuario.
+        var resultadoRol = await UserManager.AddToRoleAsync(
+            usuario,
+            "Usuario");
+
+        if (!resultadoRol.Succeeded)
+        {
+            var eliminacion =
+                await UserManager.DeleteAsync(usuario);
+
+            mensajeError = eliminacion.Succeeded
+                ? "No se pudo asignar el rol. Inténtalo nuevamente."
+                : "No se pudo completar el registro. Contacta al administrador.";
+
+            return;
+        }
+
+        registroExitoso = true;
+    }
+
+    // ========================================
+    // VALIDACIONES
+    // ========================================
+
+    public class ModeloRegistro
+    {
+        [Required(ErrorMessage = "El nombre es obligatorio.")]
+        public string NombreCompleto { get; set; } = "";
+
+        [Required(ErrorMessage = "El correo es obligatorio.")]
+        [EmailAddress(ErrorMessage = "Ingresa un correo válido.")]
+        public string Email { get; set; } = "";
+
+        [Required(ErrorMessage = "La contraseña es obligatoria.")]
+        [MinLength(
+            8,
+            ErrorMessage = "Mínimo 8 caracteres.")]
+        public string Password { get; set; } = "";
+
+        [Required(ErrorMessage = "Confirma tu contraseña.")]
+        [Compare(
+            nameof(Password),
+            ErrorMessage = "Las contraseñas no coinciden.")]
+        public string ConfirmarPassword { get; set; } = "";
+    }
+}
